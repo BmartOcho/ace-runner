@@ -35,7 +35,7 @@
 }
 
 body {
-  @apply bg-[#55277F] text-foreground;
+  @apply bg-[#55277F] text-white;
 }
 
 @layer base {

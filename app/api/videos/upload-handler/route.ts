@@ -1,8 +1,8 @@
 import { handleUpload } from "@vercel/blob/client"
 import { type NextRequest, NextResponse } from "next/server"
 
+export const maxDuration = 60 // Already set to 60 seconds
 export const dynamic = "force-dynamic"
-export const maxDuration = 60 // Set max duration to 60 seconds
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {

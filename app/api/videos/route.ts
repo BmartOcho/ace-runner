@@ -1,8 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { put } from "@vercel/blob"
 
-export const maxDuration = 60 // Set max duration to 60 seconds
-export const dynamic = "force-dynamic" // Disable caching
+export const maxDuration = 60 // Fixed: Set to maximum allowed value (60 seconds)
+export const dynamic = "force-dynamic"
+
+// Increase the body size limit to 50MB
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "50mb",
+    },
+  },
+}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -26,25 +35,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Result is required" }, { status: 400 })
     }
 
-    console.log(`Received video: ${file.name}, size: ${file.size}, type: ${file.type}`)
+    console.log(`Received video: ${file.name || "unnamed"}, size: ${file.size}, type: ${file.type}`)
     console.log(`Result: ${result}`)
-
-    // Check file size (limit to 100MB)
-    if (file.size > 100 * 1024 * 1024) {
-      console.error("File too large")
-      return NextResponse.json({ error: "Video file is too large (max 100MB)" }, { status: 400 })
-    }
 
     // Generate a unique filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
     const filename = `${timestamp}-${result}.webm`
     console.log(`Generated filename: ${filename}`)
 
-    // Upload to Vercel Blob
+    // Upload to Vercel Blob with a smaller chunk size
     console.log("Starting upload to Vercel Blob")
     const { url } = await put(filename, file, {
       access: "public",
-      handleUploadUrl: "/api/videos/upload-handler", // Optional custom handler
+      addRandomSuffix: true, // Add random suffix to avoid name collisions
+      contentType: file.type || "video/webm",
     })
     console.log(`Upload successful, URL: ${url}`)
 

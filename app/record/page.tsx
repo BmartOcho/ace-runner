@@ -19,6 +19,8 @@ export default function RecordPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const chunksRef = useRef<BlobPart[]>([])
   const [shotResult, setShotResult] = useState<"ace" | "hit" | "miss" | null>(null)
+  const [recordingDuration, setRecordingDuration] = useState(0)
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     // Start camera automatically when page loads
@@ -29,6 +31,10 @@ export default function RecordPage() {
       if (videoRef.current && videoRef.current.srcObject) {
         const tracks = (videoRef.current.srcObject as MediaStream).getTracks()
         tracks.forEach((track) => track.stop())
+      }
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
       }
     }
   }, [])
@@ -43,12 +49,12 @@ export default function RecordPage() {
         tracks.forEach((track) => track.stop())
       }
 
-      // Always use the environment (rear) camera
+      // Always use the environment (rear) camera with lower resolution for smaller file size
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "environment",
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          width: { ideal: 640 }, // Lower resolution
+          height: { ideal: 1280 }, // Lower resolution
         },
         audio: true,
       })
@@ -66,11 +72,12 @@ export default function RecordPage() {
 
   const startRecording = (stream: MediaStream) => {
     chunksRef.current = []
+    setRecordingDuration(0)
 
     // Use lower bitrate for mobile
     const options = {
       mimeType: "video/webm;codecs=vp8,opus",
-      videoBitsPerSecond: 1000000, // 1 Mbps
+      videoBitsPerSecond: 500000, // 500 Kbps - even lower for smaller files
     }
 
     // Check if the browser supports the specified mimeType
@@ -90,7 +97,7 @@ export default function RecordPage() {
 
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" })
-      console.log(`Video recorded, size: ${blob.size} bytes`)
+      console.log(`Video recorded, size: ${blob.size} bytes, duration: ${recordingDuration}s`)
       setVideoBlob(blob)
 
       if (videoRef.current) {
@@ -98,11 +105,26 @@ export default function RecordPage() {
         videoRef.current.src = URL.createObjectURL(blob)
         videoRef.current.controls = true
       }
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+      }
     }
 
-    mediaRecorder.start(1000) // Collect data in 1-second chunks
+    // Start recording with smaller chunks for better handling
+    mediaRecorder.start(500) // Collect data in 500ms chunks
     mediaRecorderRef.current = mediaRecorder
     setRecording(true)
+
+    // Start a timer to track recording duration
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingDuration((prev) => prev + 1)
+
+      // Auto-stop recording after 15 seconds to keep file size small
+      if (recordingDuration >= 14) {
+        stopRecording()
+      }
+    }, 1000)
   }
 
   const stopRecording = () => {
@@ -110,6 +132,10 @@ export default function RecordPage() {
       mediaRecorderRef.current.stop()
       setRecording(false)
       setRecordingComplete(true)
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+      }
     }
   }
 
@@ -131,17 +157,12 @@ export default function RecordPage() {
     try {
       console.log(`Starting upload, video size: ${videoBlob.size} bytes`)
 
-      // Create a smaller video blob if the original is too large
-      const uploadBlob = videoBlob
-      if (videoBlob.size > 50 * 1024 * 1024) {
-        // If larger than 50MB
-        console.log("Video is large, using smaller chunks")
-        // Just use the original for now, but in a real app you might want to compress it
-      }
-
       // Create a FormData object to send the video
       const formData = new FormData()
-      formData.append("video", uploadBlob)
+
+      // Create a smaller video blob by limiting the duration
+      // This is already handled by auto-stopping the recording after 15 seconds
+      formData.append("video", videoBlob)
       formData.append("result", result)
 
       console.log("FormData created, sending to API")
@@ -231,8 +252,9 @@ export default function RecordPage() {
               className="absolute inset-0 w-full h-full object-cover"
             />
             {recording && (
-              <div className="absolute top-4 right-4">
-                <div className="bg-red-500 rounded-full h-4 w-4 animate-pulse"></div>
+              <div className="absolute top-4 right-4 flex items-center">
+                <div className="bg-red-500 rounded-full h-4 w-4 animate-pulse mr-2"></div>
+                <span className="text-white text-xs bg-black/50 px-2 py-1 rounded">{recordingDuration}s</span>
               </div>
             )}
           </div>
