@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { uploadRawVideo } from "@/lib/blob-storage"
+import { addToQueue } from "@/lib/queue-manager"
 
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
@@ -49,10 +50,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       notes,
     })
 
+    // Add the video to the processing queue
+    const queueItem = addToQueue(videoRecord)
+    console.log("Added to processing queue:", queueItem?.id)
+
     // Return success response with the video record
     return NextResponse.json({
       success: true,
       ...videoRecord,
+      queueItem: queueItem
+        ? {
+            id: queueItem.id,
+            status: queueItem.status,
+            position: queueItem.priority,
+          }
+        : null,
     })
   } catch (error) {
     console.error("Error in video upload API:", error)

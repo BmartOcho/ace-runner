@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Info } from "lucide-react"
+import { ArrowLeft, Info, ListOrdered } from "lucide-react"
 import { VideoPlayer } from "../components/video-player"
 import { getVideoRecords } from "@/lib/local-storage"
+import { getQueueStats } from "@/lib/queue-manager"
 import type { VideoRecord } from "@/types/video"
 
 export default function DashboardPage() {
@@ -15,11 +16,23 @@ export default function DashboardPage() {
   const [videos, setVideos] = useState<VideoRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showMetadata, setShowMetadata] = useState<string | null>(null)
+  const [queueStats, setQueueStats] = useState({
+    total: 0,
+    pending: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+  })
 
   useEffect(() => {
     // Load videos from local storage
     const storedVideos = getVideoRecords()
     setVideos(storedVideos)
+
+    // Load queue stats
+    const stats = getQueueStats()
+    setQueueStats(stats)
+
     setLoading(false)
   }, [])
 
@@ -58,14 +71,27 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen p-4 bg-[#55277F]">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6 flex items-center">
-          <Button variant="ghost" size="sm" asChild className="mr-4">
-            <Link href="/">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center">
+            <Button variant="ghost" size="sm" asChild className="mr-4">
+              <Link href="/">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back
+              </Link>
+            </Button>
+            <h1 className="text-2xl font-bold text-white">Your Videos</h1>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/queue">
+              <ListOrdered className="h-4 w-4 mr-2" />
+              Processing Queue
+              {queueStats.pending > 0 && (
+                <span className="ml-2 bg-yellow-500 text-white rounded-full px-2 py-0.5 text-xs">
+                  {queueStats.pending}
+                </span>
+              )}
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold text-white">Your Videos</h1>
         </div>
 
         <Card>
@@ -100,6 +126,26 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm text-gray-500">Date: {formatDate(video.timestamp)}</p>
                       <p className={`text-sm ${getResultClass(video.result)}`}>Result: {video.result.toUpperCase()}</p>
+
+                      {video.metadata?.processingStatus && (
+                        <div className="mt-1">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              video.metadata.processingStatus === "pending"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : video.metadata.processingStatus === "processing"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : video.metadata.processingStatus === "completed"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            AI:{" "}
+                            {video.metadata.processingStatus.charAt(0).toUpperCase() +
+                              video.metadata.processingStatus.slice(1)}
+                          </span>
+                        </div>
+                      )}
 
                       {showMetadata === video.id && video.metadata && (
                         <div className="mt-2 p-2 bg-gray-50 rounded-md text-xs">
@@ -139,6 +185,30 @@ export default function DashboardPage() {
                           <p>
                             <strong>AI Processed:</strong> {video.metadata.aiProcessed ? "Yes" : "No"}
                           </p>
+                          {video.metadata.aiAnalysis && (
+                            <>
+                              <p className="mt-1 font-medium">AI Analysis Results:</p>
+                              <p>
+                                <strong>Detected Result:</strong> {video.metadata.aiAnalysis.detectedResult}
+                              </p>
+                              <p>
+                                <strong>Confidence:</strong> {video.metadata.aiAnalysis.confidence}%
+                              </p>
+                              {video.metadata.aiAnalysis.analyzedVideoUrl && (
+                                <p>
+                                  <Button
+                                    variant="link"
+                                    className="p-0 h-auto text-xs"
+                                    onClick={() => {
+                                      window.open(video.metadata.aiAnalysis.analyzedVideoUrl, "_blank")
+                                    }}
+                                  >
+                                    View Analyzed Video
+                                  </Button>
+                                </p>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
