@@ -1,17 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { put } from "@vercel/blob"
+import { uploadRawVideo } from "@/lib/blob-storage"
 
-export const maxDuration = 60 // Fixed: Set to maximum allowed value (60 seconds)
+export const maxDuration = 60
 export const dynamic = "force-dynamic"
-
-// Increase the body size limit to 50MB
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "50mb",
-    },
-  },
-}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -22,9 +13,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.log("Form data parsed")
 
     const file = formData.get("video") as File | null
-    const result = formData.get("result") as string | null
+    const result = formData.get("result") as "ace" | "hit" | "miss" | null
 
-    // Validate inputs
+    // Optional metadata fields
+    const location = formData.get("location") as string | null
+    const discType = formData.get("discType") as string | null
+    const throwType = formData.get("throwType") as string | null
+    const distance = formData.get("distance") ? Number(formData.get("distance")) : undefined
+    const windConditions = formData.get("windConditions") as string | null
+    const notes = formData.get("notes") as string | null
+
+    // Validate required inputs
     if (!file) {
       console.error("No video file provided")
       return NextResponse.json({ error: "Video file is required" }, { status: 400 })
@@ -38,27 +37,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.log(`Received video: ${file.name || "unnamed"}, size: ${file.size}, type: ${file.type}`)
     console.log(`Result: ${result}`)
 
-    // Generate a unique filename
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-    const filename = `${timestamp}-${result}.webm`
-    console.log(`Generated filename: ${filename}`)
-
-    // Upload to Vercel Blob with a smaller chunk size
-    console.log("Starting upload to Vercel Blob")
-    const { url } = await put(filename, file, {
-      access: "public",
-      addRandomSuffix: true, // Add random suffix to avoid name collisions
-      contentType: file.type || "video/webm",
-    })
-    console.log(`Upload successful, URL: ${url}`)
-
-    // Return success response
-    return NextResponse.json({
-      success: true,
-      url,
+    // Upload the video with metadata
+    const videoRecord = await uploadRawVideo(file, {
       result,
       timestamp: new Date().toISOString(),
-      id: crypto.randomUUID(),
+      location,
+      discType,
+      throwType,
+      distance,
+      windConditions,
+      notes,
+    })
+
+    // Return success response with the video record
+    return NextResponse.json({
+      success: true,
+      ...videoRecord,
     })
   } catch (error) {
     console.error("Error in video upload API:", error)

@@ -21,3 +21,31 @@ export function getVideoRecords(): VideoRecord[] {
     return []
   }
 }
+
+export function getVideoRecordById(id: string): VideoRecord | undefined {
+  try {
+    const videos = getVideoRecords()
+    return videos.find((video) => video.id === id)
+  } catch (error) {
+    console.error("Error getting video record by ID:", error)
+    return undefined
+  }
+}
+
+export function updateVideoRecord(updatedRecord: VideoRecord): boolean {
+  try {
+    const videos = getVideoRecords()
+    const index = videos.findIndex((video) => video.id === updatedRecord.id)
+
+    if (index !== -1) {
+      videos[index] = updatedRecord
+      localStorage.setItem(VIDEOS_STORAGE_KEY, JSON.stringify(videos))
+      return true
+    }
+
+    return false
+  } catch (error) {
+    console.error("Error updating video record:", error)
+    return false
+  }
+}
