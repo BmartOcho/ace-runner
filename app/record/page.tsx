@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
 import { saveVideoRecord } from "@/lib/local-storage"
 import type { VideoRecord } from "@/types/video"
 
@@ -21,6 +22,15 @@ export default function RecordPage() {
   const [shotResult, setShotResult] = useState<"ace" | "hit" | "miss" | null>(null)
   const [recordingDuration, setRecordingDuration] = useState(0)
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Metadata fields
+  const [location, setLocation] = useState("")
+  const [discType, setDiscType] = useState("")
+  const [throwType, setThrowType] = useState("")
+  const [distance, setDistance] = useState("")
+  const [windConditions, setWindConditions] = useState("")
+  const [notes, setNotes] = useState("")
+  const [showMetadataForm, setShowMetadataForm] = useState(false)
 
   useEffect(() => {
     // Start camera automatically when page loads
@@ -143,13 +153,22 @@ export default function RecordPage() {
     stopRecording()
   }
 
-  const handleShotResult = async (result: "ace" | "hit" | "miss") => {
+  const handleShotResult = (result: "ace" | "hit" | "miss") => {
     if (!videoBlob) {
       setError("No video recorded")
       return
     }
 
     setShotResult(result)
+    setShowMetadataForm(true)
+  }
+
+  const handleUpload = async () => {
+    if (!videoBlob || !shotResult) {
+      setError("No video recorded or result selected")
+      return
+    }
+
     setUploading(true)
     setUploadProgress(0)
     setError(null)
@@ -160,10 +179,17 @@ export default function RecordPage() {
       // Create a FormData object to send the video
       const formData = new FormData()
 
-      // Create a smaller video blob by limiting the duration
-      // This is already handled by auto-stopping the recording after 15 seconds
+      // Add video and result
       formData.append("video", videoBlob)
-      formData.append("result", result)
+      formData.append("result", shotResult)
+
+      // Add metadata
+      if (location) formData.append("location", location)
+      if (discType) formData.append("discType", discType)
+      if (throwType) formData.append("throwType", throwType)
+      if (distance) formData.append("distance", distance)
+      if (windConditions) formData.append("windConditions", windConditions)
+      if (notes) formData.append("notes", notes)
 
       console.log("FormData created, sending to API")
 
@@ -190,9 +216,19 @@ export default function RecordPage() {
             const videoRecord: VideoRecord = {
               id: data.id,
               url: data.url,
-              result: result,
+              result: shotResult,
               timestamp: data.timestamp,
-              title: `${result.charAt(0).toUpperCase() + result.slice(1)} Throw`,
+              title: `${shotResult.charAt(0).toUpperCase() + shotResult.slice(1)} Throw`,
+              metadata: {
+                userId: "anonymous",
+                location: location || "unknown",
+                discType: discType || "unknown",
+                throwType: throwType || "unknown",
+                distance: distance ? Number(distance) : undefined,
+                windConditions: windConditions || "unknown",
+                notes: notes || "",
+                aiProcessed: false,
+              },
             }
 
             saveVideoRecord(videoRecord)
@@ -238,7 +274,7 @@ export default function RecordPage() {
       <Card className="w-full max-w-md flex flex-col h-auto">
         <CardHeader className="py-3">
           <CardTitle className="text-center text-lg">
-            {recordingComplete ? "Rate Your Shot" : "Recording Throw"}
+            {recordingComplete ? (showMetadataForm ? "Add Throw Details" : "Rate Your Shot") : "Recording Throw"}
           </CardTitle>
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </CardHeader>
@@ -260,59 +296,154 @@ export default function RecordPage() {
           </div>
 
           {recordingComplete ? (
-            <div className="w-full space-y-3 mt-2">
-              <h3 className="font-medium text-center text-sm">Rate Your Shot</h3>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  onClick={() => handleShotResult("ace")}
-                  disabled={uploading}
-                  className={`py-2 h-auto ${
-                    shotResult === "ace"
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                  }`}
-                >
-                  Ace
-                </Button>
-                <Button
-                  onClick={() => handleShotResult("hit")}
-                  disabled={uploading}
-                  className={`py-2 h-auto ${
-                    shotResult === "hit"
-                      ? "bg-blue-600 hover:bg-blue-700"
-                      : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                  }`}
-                >
-                  Hit
-                </Button>
-                <Button
-                  onClick={() => handleShotResult("miss")}
-                  disabled={uploading}
-                  className={`py-2 h-auto ${
-                    shotResult === "miss"
-                      ? "bg-red-600 hover:bg-red-700"
-                      : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-                  }`}
-                >
-                  Miss
-                </Button>
-              </div>
-
-              {uploading && (
-                <div className="text-center mt-2 space-y-1">
-                  <div className="text-blue-600 font-medium text-sm">Uploading video... {uploadProgress}%</div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+            showMetadataForm ? (
+              <div className="w-full space-y-3 mt-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label htmlFor="location" className="block text-sm font-medium mb-1">
+                      Location
+                    </label>
+                    <input
+                      id="location"
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="w-full p-2 text-sm border rounded"
+                      placeholder="Course name"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="discType" className="block text-sm font-medium mb-1">
+                      Disc Type
+                    </label>
+                    <input
+                      id="discType"
+                      type="text"
+                      value={discType}
+                      onChange={(e) => setDiscType(e.target.value)}
+                      className="w-full p-2 text-sm border rounded"
+                      placeholder="Putter, Driver, etc."
+                    />
                   </div>
                 </div>
-              )}
 
-              {shotResult && !uploading && (
-                <div className="text-center mt-2 text-green-600 font-medium text-sm">
-                  Shot recorded as: {shotResult.toUpperCase()}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label htmlFor="throwType" className="block text-sm font-medium mb-1">
+                      Throw Type
+                    </label>
+                    <input
+                      id="throwType"
+                      type="text"
+                      value={throwType}
+                      onChange={(e) => setThrowType(e.target.value)}
+                      className="w-full p-2 text-sm border rounded"
+                      placeholder="Backhand, Forehand"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="distance" className="block text-sm font-medium mb-1">
+                      Distance (ft)
+                    </label>
+                    <input
+                      id="distance"
+                      type="number"
+                      value={distance}
+                      onChange={(e) => setDistance(e.target.value)}
+                      className="w-full p-2 text-sm border rounded"
+                      placeholder="Distance in feet"
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div>
+                  <label htmlFor="windConditions" className="block text-sm font-medium mb-1">
+                    Wind Conditions
+                  </label>
+                  <input
+                    id="windConditions"
+                    type="text"
+                    value={windConditions}
+                    onChange={(e) => setWindConditions(e.target.value)}
+                    className="w-full p-2 text-sm border rounded"
+                    placeholder="Calm, Light, Strong, etc."
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="notes" className="block text-sm font-medium mb-1">
+                    Notes
+                  </label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full p-2 text-sm border rounded"
+                    placeholder="Any additional notes about this throw"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => setShowMetadataForm(false)}
+                    variant="outline"
+                    className="flex-1"
+                    disabled={uploading}
+                  >
+                    Back
+                  </Button>
+                  <Button onClick={handleUpload} className="flex-1" disabled={uploading}>
+                    {uploading ? `Uploading ${uploadProgress}%` : "Save & Upload"}
+                  </Button>
+                </div>
+
+                {uploading && (
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                    <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="w-full space-y-3 mt-2">
+                <h3 className="font-medium text-center text-sm">Rate Your Shot</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    onClick={() => handleShotResult("ace")}
+                    disabled={uploading}
+                    className={`py-2 h-auto ${
+                      shotResult === "ace"
+                        ? "bg-green-600 hover:bg-green-700"
+                        : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                    }`}
+                  >
+                    Ace
+                  </Button>
+                  <Button
+                    onClick={() => handleShotResult("hit")}
+                    disabled={uploading}
+                    className={`py-2 h-auto ${
+                      shotResult === "hit"
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                    }`}
+                  >
+                    Hit
+                  </Button>
+                  <Button
+                    onClick={() => handleShotResult("miss")}
+                    disabled={uploading}
+                    className={`py-2 h-auto ${
+                      shotResult === "miss"
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                    }`}
+                  >
+                    Miss
+                  </Button>
+                </div>
+              </div>
+            )
           ) : (
             <Button
               onClick={handleAttemptComplete}
